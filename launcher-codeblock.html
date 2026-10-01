@@ -15,6 +15,7 @@
     .pt-root code, .pt-root pre { font: 12px/1.4 ui-monospace, Menlo, monospace; }
     .pt-root .pt-call { background: #f6f8fa; border: 1px solid #ddd; border-radius: 4px; padding: 8px; white-space: pre-wrap; word-break: break-all; margin: 8px 0 0; }
     .pt-root .pt-status { margin: 6px 0; font-weight: 600; }
+    .pt-root .pt-note { margin: 0 0 6px; color: #555; }
     .pt-root .pt-log { background: #111; color: #d6f5d6; border-radius: 4px; padding: 8px; height: 220px; overflow: auto; white-space: pre-wrap; margin: 0; }
   </style>
 
@@ -59,6 +60,16 @@
   <div class="pt-status" id="pt-status">No popup opened yet.</div>
   <input type="text" id="pt-msg" placeholder="Message to send to popup" value="Hello from parent">
   <button type="button" id="pt-send">Send to popup</button>
+
+  <h3>Popup blocking</h3>
+  <p class="pt-note">These open the URL with the size settings above but leave out noopener/noreferrer, so a null result from window.open means the popup was blocked.</p>
+  <div>
+    <button type="button" data-block="500">Open after 0.5 s</button>
+    <button type="button" data-block="2000">Open after 2 s</button>
+    <button type="button" data-block="5000">Open after 5 s</button>
+    <button type="button" data-block="fetch">Open after network request</button>
+  </div>
+  <label><input type="checkbox" id="pt-onload"> Try to open a popup on page load (reload the page to test)</label>
 
   <h3>Event log <button type="button" id="pt-clear">Clear</button></h3>
   <pre class="pt-log" id="pt-log"></pre>
@@ -107,18 +118,25 @@
       }
     }
 
-    function openPopup() {
+    // opts.blockTest: drop noopener/noreferrer so a null return can only mean "blocked".
+    function openPopup(opts) {
+      opts = opts || {};
       var url = $('pt-url').value, name = $('pt-name').value, features = buildFeatures();
-      log('open  url=' + url + '  name=' + name + '  features="' + features + '"');
+      if (opts.blockTest) {
+        features = features.split(',').filter(function (f) { return f !== 'noopener' && f !== 'noreferrer'; }).join(',');
+      }
+      var prefix = opts.label ? opts.label + ': ' : '';
+      log(prefix + 'open  url=' + url + '  name=' + name + '  features="' + features + '"');
       var ref;
       try {
         ref = window.open(url, name, features);
       } catch (e) {
-        log('open threw: ' + e);
+        log(prefix + 'open threw: ' + e);
         return;
       }
       popupRef = ref || null;
-      log('open returned: ' + (ref ? 'Window object' : String(ref)));
+      log(prefix + 'open returned: ' + (ref ? 'Window object' : String(ref)));
+      if (opts.blockTest) log(prefix + (ref ? 'OPENED (not blocked)' : 'BLOCKED (window.open returned null)'));
       setStatus();
     }
 
@@ -159,9 +177,26 @@
       openPopup();
     });
 
+    root.addEventListener('click', function (e) {
+      var b = e.target.closest('[data-block]');
+      if (!b) return;
+      var start = Date.now();
+      function elapsed() { return ((Date.now() - start) / 1000).toFixed(2) + ' s after click'; }
+      if (b.dataset.block === 'fetch') {
+        log('network request started (click)');
+        fetch(location.href, { cache: 'no-store' })
+          .then(function (r) { log('network request finished: HTTP ' + r.status); }, function (err) { log('network request failed: ' + err); })
+          .then(function () { openPopup({ blockTest: true, label: 'after network request, ' + elapsed() }); });
+      } else {
+        var ms = Number(b.dataset.block);
+        log('scheduled open in ' + ms / 1000 + ' s (click)');
+        setTimeout(function () { openPopup({ blockTest: true, label: 'timer, ' + elapsed() }); }, ms);
+      }
+    });
+
     root.addEventListener('input', renderCall);
     root.addEventListener('change', renderCall);
-    $('pt-open').addEventListener('click', openPopup);
+    $('pt-open').addEventListener('click', function () { openPopup(); });
     $('pt-clear').addEventListener('click', function () { $('pt-log').textContent = ''; });
 
     $('pt-send').addEventListener('click', function () {
@@ -182,6 +217,16 @@
 
     renderCall();
     setStatus();
+
+    // "Open on page load" is remembered across reloads, since it has to run before any click.
+    var ONLOAD_KEY = 'pt-open-on-load';
+    function getOnload() { try { return localStorage.getItem(ONLOAD_KEY) === '1'; } catch (e) { return false; } }
+    $('pt-onload').checked = getOnload();
+    $('pt-onload').addEventListener('change', function () {
+      try { localStorage.setItem(ONLOAD_KEY, this.checked ? '1' : '0'); } catch (e) { log('could not save setting: ' + e); }
+      log('open on page load ' + (this.checked ? 'enabled. Reload the page to test.' : 'disabled.'));
+    });
+    if (getOnload()) openPopup({ blockTest: true, label: 'on page load' });
   })();
   </script>
 </div>
