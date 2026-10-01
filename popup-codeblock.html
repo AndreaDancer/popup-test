@@ -1,0 +1,91 @@
+<!-- Popup Test: POPUP WINDOW. Paste into a Squarespace Code Block (HTML, "Display Source" off) on the page with slug /popup-test-window. -->
+<div id="pt-popup" class="pt-root">
+  <style>
+    .pt-root { font: 14px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #222; max-width: 700px; }
+    .pt-root h3 { margin: 16px 0 8px; font-size: 16px; }
+    .pt-root table { border-collapse: collapse; }
+    .pt-root td { padding: 3px 12px 3px 0; vertical-align: top; }
+    .pt-root td:first-child { color: #666; white-space: nowrap; }
+    .pt-root code, .pt-root pre { font: 12px/1.4 ui-monospace, Menlo, monospace; }
+    .pt-root input[type=text] { padding: 4px 6px; border: 1px solid #bbb; border-radius: 4px; font: inherit; }
+    .pt-root button { padding: 6px 12px; margin: 3px 6px 3px 0; border: 1px solid #888; border-radius: 4px; background: #f4f4f4; cursor: pointer; font: inherit; color: #222; }
+    .pt-root button:disabled { opacity: .5; cursor: default; }
+    .pt-root .pt-log { background: #111; color: #d6f5d6; border-radius: 4px; padding: 8px; height: 160px; overflow: auto; white-space: pre-wrap; margin: 0; }
+  </style>
+
+  <h3>Window metrics</h3>
+  <table>
+    <tr><td>inner (viewport)</td><td><code id="pt-inner"></code></td></tr>
+    <tr><td>outer (window)</td><td><code id="pt-outer"></code></td></tr>
+    <tr><td>screenX / screenY</td><td><code id="pt-screen"></code></td></tr>
+    <tr><td>window.name</td><td><code id="pt-wname"></code></td></tr>
+    <tr><td>window.opener</td><td><code id="pt-opener"></code></td></tr>
+    <tr><td>document.referrer</td><td><code id="pt-referrer"></code></td></tr>
+  </table>
+
+  <h3>Popup → parent</h3>
+  <input type="text" id="pt-msg" placeholder="Message to send to parent" value="Hello from popup">
+  <button type="button" id="pt-send">Send to parent</button>
+
+  <h3>Event log</h3>
+  <pre class="pt-log" id="pt-log"></pre>
+
+  <script>
+  (function () {
+    function $(id) { return document.getElementById(id); }
+    var opener = window.opener;
+
+    function log(text) {
+      var t = new Date().toLocaleTimeString([], { hour12: false }) + '.' + String(Date.now() % 1000).padStart(3, '0');
+      var el = $('pt-log');
+      el.textContent += '[' + t + '] ' + text + '\n';
+      el.scrollTop = el.scrollHeight;
+    }
+
+    function metrics() {
+      return {
+        inner: window.innerWidth + '×' + window.innerHeight,
+        outer: window.outerWidth + '×' + window.outerHeight,
+        screen: window.screenX + ', ' + window.screenY
+      };
+    }
+
+    function renderMetrics() {
+      var m = metrics();
+      $('pt-inner').textContent = m.inner;
+      $('pt-outer').textContent = m.outer;
+      $('pt-screen').textContent = m.screen;
+    }
+
+    function sendToParent(text, info) {
+      if (!opener || opener.closed) { log('send skipped: no opener'); return; }
+      opener.postMessage({ pt: true, from: 'popup', text: text, info: info }, location.origin);
+      log('sent to parent: ' + JSON.stringify(text));
+    }
+
+    $('pt-wname').textContent = JSON.stringify(window.name);
+    $('pt-opener').textContent = opener ? 'present' : 'null (no opener — expected with noopener/noreferrer)';
+    $('pt-referrer').textContent = document.referrer || '(empty — expected with noreferrer)';
+    $('pt-send').disabled = !opener;
+    renderMetrics();
+
+    var resizeTimer;
+    window.addEventListener('resize', function () {
+      renderMetrics();
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(function () { log('resized: inner ' + metrics().inner + ', outer ' + metrics().outer); }, 250);
+    });
+
+    $('pt-send').addEventListener('click', function () { sendToParent($('pt-msg').value); });
+
+    window.addEventListener('message', function (e) {
+      if (!e.data || e.data.pt !== true || e.data.from !== 'parent') return;
+      if (e.origin !== location.origin) { log('ignored message from other origin: ' + e.origin); return; }
+      log('received from parent: ' + JSON.stringify(e.data.text));
+    });
+
+    log('loaded. opener: ' + (opener ? 'present' : 'null') + ', inner ' + metrics().inner + ', outer ' + metrics().outer);
+    sendToParent('popup ready', metrics());
+  })();
+  </script>
+</div>

@@ -1,0 +1,187 @@
+<!-- Popup Test: LAUNCHER. Paste into a Squarespace Code Block (HTML, "Display Source" off). -->
+<div id="pt-launcher" class="pt-root">
+  <style>
+    .pt-root { font: 14px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #222; max-width: 900px; }
+    .pt-root h3 { margin: 18px 0 8px; font-size: 16px; }
+    .pt-root fieldset { border: 1px solid #ccc; border-radius: 6px; padding: 10px 12px; margin: 0 0 12px; }
+    .pt-root legend { padding: 0 4px; font-weight: 600; }
+    .pt-root label { display: inline-flex; align-items: center; gap: 4px; margin: 3px 12px 3px 0; }
+    .pt-root input[type=text], .pt-root input[type=number] { padding: 4px 6px; border: 1px solid #bbb; border-radius: 4px; font: inherit; }
+    .pt-root input[type=number] { width: 80px; }
+    .pt-root .pt-wide { width: 100%; box-sizing: border-box; }
+    .pt-root button { padding: 6px 12px; margin: 3px 6px 3px 0; border: 1px solid #888; border-radius: 4px; background: #f4f4f4; cursor: pointer; font: inherit; color: #222; }
+    .pt-root button.pt-primary { background: #1a73e8; border-color: #1a73e8; color: #fff; }
+    .pt-root button:disabled { opacity: .5; cursor: default; }
+    .pt-root code, .pt-root pre { font: 12px/1.4 ui-monospace, Menlo, monospace; }
+    .pt-root .pt-call { background: #f6f8fa; border: 1px solid #ddd; border-radius: 4px; padding: 8px; white-space: pre-wrap; word-break: break-all; margin: 8px 0 0; }
+    .pt-root .pt-status { margin: 6px 0; font-weight: 600; }
+    .pt-root .pt-log { background: #111; color: #d6f5d6; border-radius: 4px; padding: 8px; height: 220px; overflow: auto; white-space: pre-wrap; margin: 0; }
+  </style>
+
+  <fieldset>
+    <legend>Target</legend>
+    <label class="pt-wide">URL <input type="text" id="pt-url" class="pt-wide" value="/popup-test-window"></label>
+    <label>Window name <input type="text" id="pt-name" value="_blank"></label>
+  </fieldset>
+
+  <fieldset>
+    <legend>Size &amp; position (leave blank to omit)</legend>
+    <label>width <input type="number" id="pt-width" value="500"></label>
+    <label>height <input type="number" id="pt-height" value="400"></label>
+    <label>left <input type="number" id="pt-left"></label>
+    <label>top <input type="number" id="pt-top"></label>
+  </fieldset>
+
+  <fieldset>
+    <legend>Features</legend>
+    <label><input type="checkbox" data-feature="popup"> popup</label>
+    <label><input type="checkbox" data-feature="noopener"> noopener</label>
+    <label><input type="checkbox" data-feature="noreferrer"> noreferrer</label>
+    <label><input type="checkbox" data-feature="resizable"> resizable</label>
+    <label><input type="checkbox" data-feature="scrollbars"> scrollbars</label>
+    <label><input type="checkbox" data-feature="toolbar"> toolbar</label>
+    <label><input type="checkbox" data-feature="menubar"> menubar</label>
+    <label><input type="checkbox" data-feature="location"> location</label>
+    <label><input type="checkbox" data-feature="status"> status</label>
+  </fieldset>
+
+  <div>
+    <button type="button" class="pt-primary" id="pt-open">Open popup</button>
+    <button type="button" data-preset="small">Small 400×300</button>
+    <button type="button" data-preset="centered">Centered 800×600</button>
+    <button type="button" data-preset="full">Full-feature window</button>
+    <button type="button" data-preset="noopener">noopener</button>
+    <button type="button" data-preset="named">Reuse named window</button>
+  </div>
+  <pre class="pt-call" id="pt-call"></pre>
+
+  <h3>Parent ↔ popup</h3>
+  <div class="pt-status" id="pt-status">No popup opened yet.</div>
+  <input type="text" id="pt-msg" placeholder="Message to send to popup" value="Hello from parent">
+  <button type="button" id="pt-send">Send to popup</button>
+
+  <h3>Event log <button type="button" id="pt-clear">Clear</button></h3>
+  <pre class="pt-log" id="pt-log"></pre>
+
+  <script>
+  (function () {
+    var root = document.getElementById('pt-launcher');
+    function $(id) { return document.getElementById(id); }
+    var popupRef = null;
+
+    // When testing locally from the snippet files, point at the local popup file instead.
+    if (/\.html?$/.test(location.pathname)) $('pt-url').value = 'popup-codeblock.html';
+
+    function log(text) {
+      var t = new Date().toLocaleTimeString([], { hour12: false }) + '.' + String(Date.now() % 1000).padStart(3, '0');
+      var el = $('pt-log');
+      el.textContent += '[' + t + '] ' + text + '\n';
+      el.scrollTop = el.scrollHeight;
+    }
+
+    function featureCheckboxes() { return root.querySelectorAll('input[data-feature]'); }
+
+    function buildFeatures() {
+      var parts = [];
+      ['width', 'height', 'left', 'top'].forEach(function (k) {
+        var v = $('pt-' + k).value.trim();
+        if (v !== '') parts.push(k + '=' + v);
+      });
+      featureCheckboxes().forEach(function (cb) { if (cb.checked) parts.push(cb.dataset.feature); });
+      return parts.join(',');
+    }
+
+    function renderCall() {
+      $('pt-call').textContent = 'window.open(' + JSON.stringify($('pt-url').value) + ', ' +
+        JSON.stringify($('pt-name').value) + ', ' + JSON.stringify(buildFeatures()) + ')';
+    }
+
+    function setStatus() {
+      var s = $('pt-status');
+      if (popupRef && !popupRef.closed) {
+        s.textContent = 'Have a window reference to an open popup.';
+        $('pt-send').disabled = false;
+      } else {
+        s.textContent = popupRef === null ? 'No window reference (none opened, or noopener was used).' : 'Popup has been closed.';
+        $('pt-send').disabled = true;
+      }
+    }
+
+    function openPopup() {
+      var url = $('pt-url').value, name = $('pt-name').value, features = buildFeatures();
+      log('open  url=' + url + '  name=' + name + '  features="' + features + '"');
+      var ref;
+      try {
+        ref = window.open(url, name, features);
+      } catch (e) {
+        log('open threw: ' + e);
+        return;
+      }
+      popupRef = ref || null;
+      log('open returned: ' + (ref ? 'Window object' : String(ref)));
+      setStatus();
+    }
+
+    function setForm(opts) {
+      ['width', 'height', 'left', 'top'].forEach(function (k) {
+        $('pt-' + k).value = opts[k] != null ? opts[k] : '';
+      });
+      var on = opts.features || [];
+      featureCheckboxes().forEach(function (cb) { cb.checked = on.indexOf(cb.dataset.feature) !== -1; });
+      $('pt-name').value = opts.name || '_blank';
+      renderCall();
+    }
+
+    var presets = {
+      small: function () { return { width: 400, height: 300, features: ['popup'] }; },
+      centered: function () {
+        var w = 800, h = 600;
+        var sx = window.screenLeft != null ? window.screenLeft : window.screenX;
+        var sy = window.screenTop != null ? window.screenTop : window.screenY;
+        return {
+          width: w, height: h, features: ['popup'],
+          left: Math.round(sx + (window.outerWidth - w) / 2),
+          top: Math.round(sy + (window.outerHeight - h) / 2)
+        };
+      },
+      full: function () {
+        return { width: 900, height: 700, features: ['resizable', 'scrollbars', 'toolbar', 'menubar', 'location', 'status'] };
+      },
+      noopener: function () { return { width: 500, height: 400, features: ['popup', 'noopener'] }; },
+      named: function () { return { width: 500, height: 400, features: ['popup'], name: 'pt-named-window' }; }
+    };
+
+    root.addEventListener('click', function (e) {
+      var p = e.target.closest('[data-preset]');
+      if (!p) return;
+      log('preset: ' + p.textContent);
+      setForm(presets[p.dataset.preset]());
+      openPopup();
+    });
+
+    root.addEventListener('input', renderCall);
+    root.addEventListener('change', renderCall);
+    $('pt-open').addEventListener('click', openPopup);
+    $('pt-clear').addEventListener('click', function () { $('pt-log').textContent = ''; });
+
+    $('pt-send').addEventListener('click', function () {
+      if (!popupRef || popupRef.closed) { setStatus(); log('send skipped: no open popup reference'); return; }
+      var text = $('pt-msg').value;
+      popupRef.postMessage({ pt: true, from: 'parent', text: text }, location.origin);
+      log('sent to popup: ' + JSON.stringify(text));
+    });
+
+    window.addEventListener('message', function (e) {
+      if (!e.data || e.data.pt !== true || e.data.from !== 'popup') return;
+      if (e.origin !== location.origin) { log('ignored message from other origin: ' + e.origin); return; }
+      log('received from popup: ' + JSON.stringify(e.data.text) + (e.data.info ? '  ' + JSON.stringify(e.data.info) : ''));
+    });
+
+    // Notice when the popup gets closed so the status line stays accurate.
+    setInterval(function () { if (popupRef && popupRef.closed) { log('popup closed'); setStatus(); popupRef = undefined; } }, 500);
+
+    renderCall();
+    setStatus();
+  })();
+  </script>
+</div>
