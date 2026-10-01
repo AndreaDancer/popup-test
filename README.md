@@ -18,6 +18,7 @@ Two snippets, one per page:
 - To test your new feature's page instead, change the **URL** field. Messaging only works when that page has the popup snippet on it and is on the same domain.
 - The popup shows its actual size so you can compare it with what you asked for. It also shows whether `window.opener` and `document.referrer` came through.
 - Both sides can send messages. Each window keeps its own log.
+- **Popup blocking** buttons open the popup 0.5, 2, or 5 seconds after your click, or after a network request finishes. The log says BLOCKED or OPENED for each. To test a popup with no click at all, check "Try to open a popup on page load" and reload the page. Uncheck it when you're done.
 
 ## Local test before uploading
 ```
